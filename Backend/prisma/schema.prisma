@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetStatus {
+  IN_OFFICE
+  OUTSIDE
+  RETURNED
+  MAINTENANCE
+  LOST
+}
+
+enum LogStatus {
+  OUT
+  IN
+}
+
+enum MovementType {
+  OUT
+  IN
+  MAINTENANCE
+}
+
+enum ValidationResult {
+  SUCCESS
+  FAILURE
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ASSET_MANAGER
+  RECEPTION
+}
+
+model Employee {
+  id          String     @id @default(uuid()) @db.Uuid
+  empId       String     @unique @map("emp_id") @db.VarChar(50)
+  name        String     @db.VarChar(150)
+  email       String     @unique @db.VarChar(150)
+  department  String     @db.VarChar(100)
+  designation String     @db.VarChar(100)
+  phone       String?    @db.VarChar(30)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  assets      Asset[]
+  logs        AssetLog[]
+
+  @@index([department])
+  @@index([name])
+  @@map("employees")
+}
+
+model Asset {
+  id                 String      @id @default(uuid()) @db.Uuid
+  assetId            String      @unique @map("asset_id") @db.VarChar(50)
+  assetType          String      @map("asset_type") @db.VarChar(100)
+  deviceName         String?     @map("device_name") @db.VarChar(150)
+  serialNumber       String      @unique @map("serial_number") @db.VarChar(100)
+  model              String?     @db.VarChar(100)
+  qrCode             String?     @unique @map("qr_code") @db.VarChar(255)
+  assignedEmployeeId String?     @map("assigned_employee_id") @db.Uuid
+  assignedDate       DateTime?   @map("assigned_date")
+  status             AssetStatus @default(IN_OFFICE)
+  remarks            String?
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  assignedEmployee Employee?  @relation(fields: [assignedEmployeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  logs             AssetLog[]
+  movementLogs     AssetMovementLog[]
+
+  @@index([assetType])
+  @@index([status])
+  @@index([assignedEmployeeId])
+  @@map("assets")
+}
+
+model AssetLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  assetId     String    @map("asset_id") @db.Uuid
+  employeeId  String?   @map("employee_id") @db.Uuid
+  exitTime    DateTime? @map("exit_time")
+  entryTime   DateTime? @map("entry_time")
+  totalHours  Decimal?  @map("total_hours") @db.Decimal(10, 2)
+  totalDays   Decimal?  @map("total_days") @db.Decimal(10, 2)
+  status      LogStatus
+  remarks     String?
+  scannedBy   String?   @map("scanned_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  asset    Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  scanner  Admin?    @relation("ScannedLogs", fields: [scannedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([assetId, status])
+  @@index([employeeId])
+  @@index([exitTime])
+  @@index([entryTime])
+  @@map("asset_logs")
+}
+
+model AssetMovementLog {
+  id               String           @id @default(uuid()) @db.Uuid
+  assetId          String?          @map("asset_id") @db.Uuid
+  assetIdentifier  String?          @map("asset_identifier") @db.VarChar(100)
+  previousStatus   AssetStatus?     @map("previous_status")
+  requestedStatus  AssetStatus?     @map("requested_status")
+  movementType     MovementType     @map("movement_type")
+  validationResult ValidationResult @map("validation_result")
+  scannedBy        String?          @map("scanned_by") @db.Uuid
+  timestamp        DateTime         @default(now())
+  remarks          String?
+
+  asset   Asset? @relation(fields: [assetId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  scanner Admin? @relation("ScannedMovementLogs", fields: [scannedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([assetId])
+  @@index([movementType])
+  @@index([validationResult])
+  @@index([timestamp])
+  @@map("asset_movement_logs")
+}
+
+model Admin {
+  id           String     @id @default(uuid()) @db.Uuid
+  username     String     @unique @db.VarChar(80)
+  email        String     @unique @db.VarChar(150)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  role         AdminRole   @default(ASSET_MANAGER)
+  lastLogin    DateTime?   @map("last_login")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  auditLogs    AuditLog[]
+  scannedLogs         AssetLog[]         @relation("ScannedLogs")
+  scannedMovementLogs AssetMovementLog[] @relation("ScannedMovementLogs")
+
+  @@index([role])
+  @@map("admins")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  adminId   String?  @map("admin_id") @db.Uuid
+  action    String   @db.VarChar(120)
+  module    String   @db.VarChar(80)
+  ipAddress String?  @map("ip_address") @db.VarChar(80)
+  timestamp DateTime @default(now())
+
+  admin Admin? @relation(fields: [adminId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([adminId])
+  @@index([module])
+  @@index([timestamp])
+  @@map("audit_logs")
+}

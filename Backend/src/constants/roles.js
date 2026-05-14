@@ -1,0 +1,5 @@
+module.exports = {
+  SUPER_ADMIN: 'SUPER_ADMIN',
+  ASSET_MANAGER: 'ASSET_MANAGER',
+  RECEPTION: 'RECEPTION'
+};
